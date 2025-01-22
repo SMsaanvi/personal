@@ -1,0 +1,593 @@
+ public partial class PassengerTagingReport : BaseRoute
+    {
+        private bool variableExtracted = false;
+        private new String fromDateStr = null;
+        private new String toDateStr = null;
+        private String truckId = null;
+        private String otherVehicles = null;
+        private DataTable Info = null;
+        private DataTable tagInfo = null;
+        private DataTable DriverTagInfo = null;
+
+        protected void Page_Load(object sender, EventArgs e)
+        {
+
+        }
+        private void extractVariable()
+        {
+            if (variableExtracted)
+            {
+                return;
+            }
+            if (Request.RequestType == "POST")
+            {
+                fromDateStr = Request.Form["fromDate"];
+                toDateStr = Request.Form["toDate"];
+                truckId = Request.Form["vehicleId"];
+                otherVehicles = Request.Form["otherVehicles"];
+            }
+            else
+            {
+                fromDateStr = Request.QueryString["fromDate"];
+                toDateStr = Request.QueryString["toDate"];
+                truckId = Request.QueryString["vehicleId"];
+                otherVehicles = Request.QueryString["otherVehicles"];
+            }
+            variableExtracted = true;
+        }
+        protected void writePassengerTagingReport()
+        {
+            extractVariable();
+
+            StringBuilder sb = new StringBuilder();
+            string[] vehicles = truckId.Split(',');
+            for (int j = 0; j < vehicles.Length; j++)
+            {
+                if (j == 0)
+                    sb.Append("'" + vehicles[j] + "'");
+                else
+                    sb.Append(",'" + vehicles[j] + "'");
+            }
+            string PsngrKey = objBll.GetPsngrKeyWord(Session["sessionId"].ToString());
+            if (PsngrKey == "SelVehChkLst")
+            {
+                StringBuilder str = new StringBuilder();
+                Info = objBll.GetPassengerTagingInfo(fromDateStr, toDateStr, sb.ToString(), otherVehicles, Session["sessionId"].ToString());
+                str.Append("<div class='dtabledwrapper'><div class=\"reportHeader\">Passenger TagIn-TagOut Report</div> "
+                                + "<div class=\"reportHeader1\"><span class='reportHeaderSpan'><b>From:</b>"
+                                + Convert.ToDateTime(fromDateStr).ToString("dd'/'MM'/'yyyy hh:mm:ss tt")
+                                + "</span><span class='reportHeaderSpan'><b>To:</b>"
+                                + Convert.ToDateTime(toDateStr).ToString("dd'/'MM'/'yyyy hh:mm:ss tt")
+                                + "</span><span class='reportHeaderSpan' style='font-size:10px'><marquee behavior='scroll' "
+                                + "direction='left'><span id='ctl00_lblNewsMarquee'>If you found any vehicle or driver text in "
+                                + "<span style='color:red'>Red</span> color then that particular vehicle or driver is not registered "
+                                + "with system.....If you found any vehicle text in <span style='color:green'>green</span> color then that "
+                                + "particular vehicle is registered but passenger entered manually......</marquee></span></div>"
+                                + "<div id=\"dtable\"></div>");
+                str.Append("<table style='border:1px solid #0e67a3' cellpadding='10'><tr style='background-color:#0e67a3;color:white'><th>Passenger Details</th><th>Vehicle Details</th><th>Rules</th></tr>");
+                if (Info.Rows.Count > 0)
+                {
+                    string tagIds = "";
+                    for (int j = 0; j < Info.Rows.Count; j++)
+                    {
+                        if (j == 0)
+                            tagIds += Info.Rows[j]["Id"];
+                        else
+                            tagIds += "," + Info.Rows[j]["Id"];
+                    }
+                    DataTable Rules = objBll.GetPassengerTagingRules(tagIds);
+                    int accountid = objBll.GetAccountId(Session["sessionId"].ToString());
+                    for (int i = 0; i < Info.Rows.Count; i++)
+                    {
+                        string vehilceID = Info.Rows[i]["VehicleId"].ToString();
+                        DriverTagInfo = objBll.GetDriverTagingInfo(Info.Rows[i]["TagInTime"].ToString(), Info.Rows[i]["TagOutTime"].ToString(), vehilceID, Session["sessionId"].ToString());
+                        string color = "#e6f3ff";
+                        if (i % 2 == 0)
+                            color = "#E9E9E9";
+                        str.Append("<tr style='background-color:" + color + "'><td><table>");
+                        str.Append("<tr><th style='text-align:left'>Name</th><td>" + Info.Rows[i]["PsngrName"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>Mobile No</th><td>" + Info.Rows[i]["MobileNo"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>Employee Id</th><td>" + Info.Rows[i]["EmpId"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>WFM ID</th><td>" + Info.Rows[i]["WFM_ID"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>WFM Task</th><td>" + Info.Rows[i]["WFM_Task"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>PTW Number</th><td>" + Info.Rows[i]["PTW_Number"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>Region</th><td>" + Info.Rows[i]["RegionName"] + "</td></tr>");
+                        if (accountid == 4315)
+                            str.Append("<tr><th style='text-align:left'>Tower Name</th><td>" + Info.Rows[i]["TowerName"] + "</td></tr>");
+						string[] imageColumns = { "DriverImage", "TagIn_OdometerPhoto", "TagOut_OdometerPhoto", "TagIn_VehiclePhoto" };
+						string[] displayNames = { "Driver Image", "Tag-In Odometer Photo", "Tag-Out Odometer Photo", "Tag-In Vehicle Photo" };
+
+						for (int index = 0; index < imageColumns.Length; index++)
+						{
+							RenderImageColumn(str, Info.Rows[i], imageColumns[index], displayNames[index]);
+						}
+						color = "black";
+                        if (Info.Rows[i]["Manual"].ToString() == "1")
+                            color = "red";
+                        else if (Info.Rows[i]["Manual"].ToString() == "2")
+                            color = "green";
+                        str.Append("</table></td><td><table><tr><th style='text-align:left'>VehicleId</th><td style='color:" + color + "'>" + Info.Rows[i]["VehicleId"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>TagIn Time</th><td>" + Info.Rows[i]["TagInTime"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>TagOut Time</th><td>" + Info.Rows[i]["TagOutTime"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>TagIn OMR</th><td>" + Info.Rows[i]["TagInOMR"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>TagOut OMR</th><td>" + Info.Rows[i]["TagOutOMR"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>Distance by OMR</th><td>" + (Convert.ToInt64(Info.Rows[i]["TagOutOMR"].ToString()) - Convert.ToInt64(Info.Rows[i]["TagInOMR"].ToString())) + "</td></tr>");
+                        if (Info.Rows[i]["DriverId"].ToString() == "0")
+                        {
+                            str.Append("<tr><th style='text-align:left'>Driver Details</th><td style='color:red'>" + Info.Rows[i]["DriverDetails"] + "</td></tr>");
+                        }
+                        else
+                        {
+                            str.Append("<tr><th style='text-align:left'>Driver</th><td>" + Info.Rows[i]["Name"] + "</td></tr>");
+                            str.Append("<tr><th style='text-align:left'>License No</th><td>" + Info.Rows[i]["LicenceNo"] + "</td></tr>");
+                        }
+                        str.Append("<tr><th style='text-align:left'>Vendor</th><td>" + Info.Rows[i]["VehicleSupplier"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>Circle</th><td>" + Info.Rows[i]["Circle"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>CT Name</th><td>" + Info.Rows[i]["CT"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>Region</th><td>" + Info.Rows[i]["vehRegionName"] + "</td></tr>");
+                        str.Append("<tr><th style='text-align:left'>GPS Reason</th><td>" + Info.Rows[i]["GPS_Reason"] + "</td></tr>");
+                        if (DriverTagInfo.Rows.Count > 0)
+                        {
+                            str.Append("<tr><th style='text-align:left'>Driver TagIn</th><td>" + DriverTagInfo.Rows[0]["DriverName"].ToString() + "</td></tr>");
+                            str.Append("<tr><th style='text-align:left'>Finger Print ID</th><td>" + DriverTagInfo.Rows[0]["IMEI"].ToString() + "</td></tr>");
+                            str.Append("<tr><th style='text-align:left'>Tagged Time</th><td>" + Convert.ToDateTime(DriverTagInfo.Rows[0]["TimeStamp"].ToString()).ToString("dd/MM/yyyy hh:mm tt") + "</td></tr>");
+                            str.Append("<tr><th style='text-align:left'>Driver Match</th><td>" + (Info.Rows[i]["Name"].ToString().ToLower() == DriverTagInfo.Rows[0]["DriverName"].ToString().ToLower() ? "YES" : "NO") + "</td></tr>");
+                        }
+                        else
+                        {
+                            str.Append("<tr><th style='text-align:left'>Driver TagIn</th><td>" + "NA" + "</td></tr>");
+                            str.Append("<tr><th style='text-align:left'>Finger Print ID</th><td>" + "NA" + "</td></tr>");
+                            str.Append("<tr><th style='text-align:left'>Tagged Time</th><td>" + "NA" + "</td></tr>");
+                        }
+                        str.Append("</table></td>");
+                        str.Append("<td><table>");
+                        for (int k = 0; k < Rules.Rows.Count; k++)
+                        {
+                            if (Convert.ToString(Info.Rows[i]["Id"]) == Convert.ToString(Rules.Rows[k]["TagId"]))
+                            {
+                                str.Append("<tr><th style='text-align:left'>" + Rules.Rows[k]["ChkName"] + "</th><td>" + Rules.Rows[k]["Status"] + "</td></tr>");
+                            }
+                        }
+                        str.Append("</table></td></tr>");
+                    }
+                }
+                else
+                {
+                    str.Append("<tr><td>No Data To Display</td><td></td></tr>");
+                }
+                str.Append("</table></div>");
+                Response.Write(str.ToString());
+            }
+            else if (PsngrKey == "AsgndVehTrck")
+            {
+                StringBuilder str = new StringBuilder();
+                Info = objBll.GetPassengerTagingInfo(fromDateStr, toDateStr, sb.ToString(), Session["sessionId"].ToString());
+                str.Append("<div class='dtabledwrapper'><div class=\"reportHeader\">Passenger TagIn-TagOut Report</div> "
+                                + "<div class=\"reportHeader1\"><span class='reportHeaderSpan'><b>From:</b>"
+                                + Convert.ToDateTime(fromDateStr).ToString("dd'/'MM'/'yyyy hh:mm:ss tt")
+                                + "</span><span class='reportHeaderSpan'><b>To:</b>"
+                                + Convert.ToDateTime(toDateStr).ToString("dd'/'MM'/'yyyy hh:mm:ss tt")
+                                + "</span></div>"
+                                + "<div id=\"dtable\"></div>");
+                str.Append("<table style='border:1px solid #0e67a3' cellpadding='10'><tr style='background-color:#0e67a3;color:white'>");
+                str.Append("<th>Name</th><th>Mobile No.</th><th>Vehicle Id</th><th>TagIn Time</th><th>TagIn Location</th>");
+                str.Append("<th>TagOut Time</th><th>TagOut Location</th><th>Distance</th><th>Route Travelled</th></tr>");
+                string color = "";
+                string distance = "0";
+                string BaseURL = "";
+                string RouteLink = "-";
+                string prvvehicle = "";
+                int totaldistance = 0;
+                if (Info.Rows.Count > 0)
+                {
+
+                    for (int i = 0; i < Info.Rows.Count; i++)
+                    {
+                        string vehicleId = Info.Rows[i]["VehicleId"].ToString();
+                        if (i == 0)
+                        {
+                            prvvehicle = vehicleId;
+                        }
+                        string TaginLocation = objBll.getPositionTxt(Info.Rows[i]["TagInLat"].ToString(), Info.Rows[i]["TagInLng"].ToString(), 0);
+                        string TagoutLocation = "";
+                        if (!string.IsNullOrEmpty(Info.Rows[i]["TagOutTime"].ToString()))
+                            TagoutLocation = objBll.getPositionTxt(Info.Rows[i]["TagOutLat"].ToString(), Info.Rows[i]["TagOutLng"].ToString(), 0);
+                        //color = "#e6f3ff";
+                        if (i % 2 == 0)
+                            color = "#E9E9E9";
+                        string starttrip = Info.Rows[i]["TagInTime"].ToString();
+                        string endtrip = Info.Rows[i]["TagOutTime"].ToString();
+                        if (!string.IsNullOrEmpty(starttrip) && !string.IsNullOrEmpty(endtrip))
+                        {
+
+                            DateTime start = Convert.ToDateTime(starttrip);
+                            DateTime end = Convert.ToDateTime(endtrip);
+                              if ((end - start).TotalDays <= 15)
+                              {
+                                object[] dist = objBll.accumulateDistance(vehicleId, start.ToString("yyyy-MM-dd HH:mm:ss"), end.ToString("yyyy-MM-dd HH:mm:ss"), null);
+                                if (dist.Length > 0)
+                                {
+                                    distance = Convert.ToInt32(Convert.ToDecimal(dist[0].ToString())).ToString();
+                                    if (prvvehicle == vehicleId)
+                                    {
+                                        totaldistance = totaldistance + Convert.ToInt32(distance);
+                                    }
+                                    else
+                                    {
+                                        str.Append("<tr style='background-color:#e6f3ff'><td colspan='7'><b>" + "Total" + "</b>"
+                                                + "</td><td><b>" + totaldistance + "</b>"
+                                                + "</td><td>" + "" + "</td></tr>");
+                                        prvvehicle = vehicleId;
+                                        totaldistance = Convert.ToInt32(distance);
+                                    }
+                                }
+                            }
+                            if (string.IsNullOrEmpty(BaseURL))
+                                BaseURL = "http://" + Request.Url.Authority.ToString() + "";
+                            string dataUrl = "sessionId=" + sessionId + "&vehicleId=" + vehicleId + "&fromDate=" + Convert.ToDateTime(starttrip).ToString("yyyy-MM-dd HH:mm:ss") + "&toDate=" + Convert.ToDateTime(endtrip).ToString("yyyy-MM-dd HH:mm:ss");
+                            BusinessLogicLayer.StringCipher objCip = new BusinessLogicLayer.StringCipher();
+                            string enctxt = HttpUtility.UrlEncode(objCip.Encrypt(dataUrl));
+                            RouteLink = "<a href='" + BaseURL + "/MobileShowRoute.aspx?e=1&q=" + enctxt + "'  target='_blank'>Route Link</a>";
+
+
+                            str.Append("<tr style='background-color:" + color + "'><td>" + Info.Rows[i]["PsngrName"] + "</td>");
+                            str.Append("<td>" + Info.Rows[i]["MobileNo"] + "</td>");
+                            str.Append("<td>" + Info.Rows[i]["VehicleId"] + "</td>");
+                            str.Append("<td>" + Info.Rows[i]["TagInTime"] + "</td>");
+                            str.Append("<td>" + TaginLocation + "</td>");
+                            str.Append("<td>" + Info.Rows[i]["TagOutTime"] + "</td>");
+                            str.Append("<td>" + TagoutLocation + "</td>");
+                            str.Append("<td>" + distance + "</td>");
+                            str.Append("<td>" + RouteLink + "</td></tr>");
+                        }
+
+                    }
+                    str.Append("<tr style='background-color:#e6f3ff'><td colspan='7'><b>" + "Total" + "</b>"
+                                                 + "</td><td><b>" + totaldistance + "</b>"
+                                                 + "</td><td>" + "" + "</td></tr>");
+                }
+                else
+                {
+                    str.Append("<tr><td>No Data To Display</td><td></td></tr>");
+                }
+                str.Append("</table></div>");
+                Response.Write(str.ToString());
+            }
+            else
+            {
+                Response.Write("This report is not configured for you...!");
+            }
+		}
+		void RenderImageColumn(StringBuilder str, DataRow row, string columnName, string displayName)
+		{
+			string filepath = HostingEnvironment.MapPath("~/Uploads/placeinfo/");
+			string imagePath = row[columnName]?.ToString();
+
+			if (!string.IsNullOrEmpty(imagePath))
+			{
+				string fullPath = filepath + imagePath;
+				string folderpath = "fleetsmart3.sensel.in/App Files/sensel/Sensel.in/fleetsmart3.ui.sensel.in/Uploads/placeinfo";
+				if (!File.Exists(fullPath))
+				{
+					try
+					{
+						BusinessLogicLayer.AmazonS3Upload.DownloadDbFiles(imagePath, folderpath, filepath);
+					}
+					catch{}
+				}
+				if (File.Exists(fullPath))
+				{
+					string imageUrl = VirtualPathUtility.ToAbsolute("~/Uploads/placeinfo/") + Path.GetFileName(imagePath);
+					// Replace ":334" and ensure HTTPS
+					string sanitizedUrl = imageUrl.Replace(":334", "").Replace("http://", "https://");
+					str.Append($"<tr><th style='text-align:center; font-size:14px;' colspan=2>{displayName}</th></tr>");					 
+					str.Append($"<tr><th style='text-align:center;' colspan=2>");// Add image as a thumbnail
+					str.Append($"<img src='{sanitizedUrl}' border='2' height='50' width='70' alt='{displayName}' style='object-fit:cover;' />");
+					str.Append($"</th></tr>");
+				}
+
+			}
+		}
+		protected void ExportPassengerTagingReport()
+		{
+			extractVariable();
+
+			StringBuilder sb = new StringBuilder();
+			string[] vehicles = truckId.Split(',');
+			for (int j = 0; j < vehicles.Length; j++)
+			{
+				if (j == 0)
+					sb.Append("'" + vehicles[j] + "'");
+				else
+					sb.Append(",'" + vehicles[j] + "'");
+			}
+
+			string PsngrKey = objBll.GetPsngrKeyWord(Session["sessionId"].ToString());
+			if (PsngrKey == "SelVehChkLst")
+			{
+				StringBuilder str = new StringBuilder();
+				Info = objBll.GetPassengerTagingInfo(fromDateStr, toDateStr, sb.ToString(), otherVehicles, Session["sessionId"].ToString());
+
+				// Initial report structure
+				str.Append("<div class='dtabledwrapper'><div class=\"reportHeader\">Passenger TagIn-TagOut Report</div> "
+							   + "<div class=\"reportHeader1\"><span class='reportHeaderSpan'><b>From:</b>"
+							   + Convert.ToDateTime(fromDateStr).ToString("dd'/'MM'/'yyyy hh:mm:ss tt")
+							   + "</span><span class='reportHeaderSpan'><b>To:</b>"
+							   + Convert.ToDateTime(toDateStr).ToString("dd'/'MM'/'yyyy hh:mm:ss tt")
+							   + "</span><span class='reportHeaderSpan' style='font-size:10px'><marquee behavior='scroll' "
+							   + "direction='left'><span id='ctl00_lblNewsMarquee'>If you found any vehicle or driver text in "
+							   + "<span style='color:red'>Red</span> color then that particular vehicle or driver is not registered "
+							   + "with system.....If you found any vehicle text in <span style='color:green'>green</span> color then that "
+							   + "particular vehicle is registered but passenger entered manually......</marquee></span></div>"
+							   + "<div id=\"dtable\"></div>");
+
+				// Start the table structure
+				str.Append("<table style='border:1px solid #0e67a3' cellpadding='10'><tr style='background-color:#430000;color:white'>");
+
+				// Main Header Row
+				str.Append("<th colspan='11' style='text-align:center;background-color:#1f497d;'>Passenger Details</th>");
+				str.Append("<th colspan='18' style='text-align:center;background-color:#1f497d;'>Vehicle Details</th>");
+				str.Append("<th colspan='15' style='text-align:center;background-color:#1f497d;'>Rules</th></tr>");
+
+				// Sub Header Row
+				str.Append("<tr style='background-color: #bbf293;'>");
+				// Passenger Details Columns
+				str.Append("<th>Name</th><th>Mobile No</th><th>Employee ID</th><th>WFM ID</th><th>WFM Task</th><th>PTW Number</th><th>Region</th><th>Driver Image</th><th>Vehicle Image</th><th>TagIn Odometer Image</th><th>Tagout Odometer Image</th>");    
+				// Vehicle Details Columns
+				str.Append("<th>VehicleId</th><th>TagIn Time</th><th>TagOut Time</th><th>TagIn OMR</th><th>TagOut OMR</th><th>Distance by OMR</th><th>Trip KM</th><th>Driver Deatils</th>");
+				str.Append("<th>Driver</th><th>License No</th><th>Vendor</th><th>Circle</th><th>CT Name</th><th>Region</th><th>GPS Reason</th>");
+				str.Append("<th>Driver TagIn</th><th>Finger Print ID</th><th>Tagged Time</th>");
+				// Rules Columns
+				str.Append("<th>DDT Compliance</th><th>Driver Commercial License</th><th>Commercial Registration</th>");
+				str.Append("<th>< 4 years Ageing</th><th>IVMS Functional</th><th>First Aid Kit</th><th>3 Point Retractable Seat Belt for Passengers</th>");
+				str.Append("<th>Driver Shoes</th><th>Safety Reflective Triangle</th><th>Driver Medical Fit</th><th>Fire Extinguisher</th>");
+				str.Append("<th>Reflective Jackets</th><th>Certification of Proper Packing</th><th>Traveler Additional Info</th><th>Misc Info</th>");  
+				str.Append("</tr>");      
+
+				if (Info.Rows.Count > 0)
+				{
+					string tagIds = "";
+					for (int j = 0; j < Info.Rows.Count; j++)
+					{
+						if (j == 0)
+							tagIds += Info.Rows[j]["Id"];
+						else
+							tagIds += "," + Info.Rows[j]["Id"];
+					}
+
+					DataTable Rules = objBll.GetPassengerTagingRules(tagIds);
+					int accountid = objBll.GetAccountId(Session["sessionId"].ToString());
+					for (int i = 0; i < Info.Rows.Count; i++)
+					{
+						string vehicleID = Info.Rows[i]["VehicleId"].ToString();
+						DriverTagInfo = objBll.GetDriverTagingInfo(Info.Rows[i]["TagInTime"].ToString(), Info.Rows[i]["TagOutTime"].ToString(), vehicleID, Session["sessionId"].ToString());
+
+						// Conditional row color
+						string color = (i % 2 == 0) ? "#E9E9E9" : "#e6f3ff";
+
+						// Passenger Details
+						str.Append("<tr style='background-color:" + color + "'>");
+						str.Append("<td>" + Info.Rows[i]["PsngrName"] + "</td>");
+						str.Append("<td>" + Info.Rows[i]["MobileNo"] + "</td>");
+						str.Append("<td>" + Info.Rows[i]["EmpId"] + "</td>");
+						str.Append("<td>" + Info.Rows[i]["WFM_ID"] + "</td>");
+						str.Append("<td>" + Info.Rows[i]["WFM_Task"] + "</td>");
+						str.Append("<td>" + Info.Rows[i]["PTW_Number"] + "</td>");
+						str.Append("<td>" + Info.Rows[i]["RegionName"] + "</td>");
+
+						string folderpath = "fleetsmart3.sensel.in/App Files/sensel/Sensel.in/fleetsmart3.ui.sensel.in/Uploads/placeinfo";
+						string filepath = HostingEnvironment.MapPath("~/Uploads/placeinfo/");
+						string baseUrl = $"{Request.Url.Scheme}://{Request.Url.Authority}"; // Get the live URL base
+						string[] imageColumns = { "DriverImage", "TagIn_VehiclePhoto", "TagIn_OdometerPhoto", "TagOut_OdometerPhoto" };
+						foreach (var column in imageColumns)
+						{
+							string imagePath = Info.Rows[i][column]?.ToString();
+							if (!string.IsNullOrEmpty(imagePath))
+							{
+								string fullPath = Path.Combine(filepath, imagePath);
+								if (!File.Exists(fullPath))
+								{
+									try
+									{ 
+										BusinessLogicLayer.AmazonS3Upload.DownloadDbFiles(imagePath, folderpath, filepath);// Download the file from S3 if not already present
+									}
+									catch {}
+								}
+								if (File.Exists(fullPath))
+								{ 
+									// Construct a live URL for the image
+										string liveUrl = $"{baseUrl}/Uploads/placeinfo/{Path.GetFileName(imagePath)}";
+										 
+										liveUrl = liveUrl.Replace(":334", "");// Replace ":334" and ensure HTTPS									 
+									    str.Append("<td style='text-align:left; font-size:14px;'>");// Append the live URL as a hyperlink to the StringBuilder
+									    str.Append($"<a href='{liveUrl}' target='_blank' style='text-decoration:underline; color:#007bff; font-size:11px;'>Download Image</a>");
+										str.Append("</td>");
+								} 
+								else
+								{
+									str.Append("<td>NA</td>");
+								}
+							}
+							else
+							{
+								str.Append("<td>NA</td>");
+							}
+						}
+						// Vehicle Details
+						color = "black";
+						if (Info.Rows[i]["Manual"].ToString() == "1")
+							color = "red";
+						else if (Info.Rows[i]["Manual"].ToString() == "2")
+							color = "green";
+						str.Append("<td style='color:{color};'>" + Info.Rows[i]["VehicleId"] + "</td>");
+						str.Append("<td>" + Info.Rows[i]["TagInTime"] + "</td>");
+						str.Append("<td>" + Info.Rows[i]["TagOutTime"] + "</td>");
+						str.Append("<td>" + Info.Rows[i]["TagInOMR"] + "</td>");
+						str.Append("<td>" + Info.Rows[i]["TagOutOMR"] + "</td>");
+						str.Append("<td>" + (Convert.ToInt64(Info.Rows[i]["TagOutOMR"]) - Convert.ToInt64(Info.Rows[i]["TagInOMR"])) + "</td>");
+						 
+						if (!string.IsNullOrEmpty(Info.Rows[i]["TagInTime"].ToString()) &&!string.IsNullOrEmpty(Info.Rows[i]["TagOutTime"].ToString()))
+						{
+							DateTime tripstart = Convert.ToDateTime(Info.Rows[i]["TagInTime"]);
+							DateTime tripend = Convert.ToDateTime(Info.Rows[i]["TagOutTime"]);
+							Object[] ret = accumulateDistance(Info.Rows[i]["VehicleId"].ToString(), tripstart.ToString("yyyy-MM-dd HH:mm:ss"), tripend.ToString("yyyy-MM-dd HH:mm:ss"), null);
+							double distance = 0; 
+							if (ret != null)
+							{
+								distance = (double)ret[0]; 
+							}
+							str.Append("<td>" + Math.Round(distance,2) + " </td>");
+						}
+						else
+						{
+							// Append empty cell or an indication that distance could not be calculated
+							str.Append("<td>0</td>");
+						}
+						if (Info.Rows[i]["DriverId"].ToString() == "0")
+						{
+							str.Append("<td style='color:red'>" + Info.Rows[i]["DriverDetails"] + "</td>");
+						}
+						else
+						{
+							str.Append("<td> </td>");
+						}
+						str.Append("<td>" + Info.Rows[i]["Name"] + "</td>");  // Driver
+						str.Append("<td>" + Info.Rows[i]["LicenceNo"] + "</td>");  // LicenseNo
+						str.Append("<td>" + Info.Rows[i]["VehicleSupplier"] + "</td>");  // Vendor
+						str.Append("<td>" + Info.Rows[i]["Circle"] + "</td>");  // Circle
+						str.Append("<td>" + Info.Rows[i]["CT"] + "</td>");  // CTName
+						str.Append("<td>" + Info.Rows[i]["vehRegionName"] + "</td>");  // Region
+						str.Append("<td>" + Info.Rows[i]["GPS_Reason"] + "</td>");  // GPSReason
+
+						if (DriverTagInfo.Rows.Count > 0)
+						{
+							str.Append("<td>" + DriverTagInfo.Rows[0]["DriverName"].ToString() + "</td>");  // DriverTagIn
+							str.Append("<td>" + DriverTagInfo.Rows[0]["IMEI"].ToString() + "</td>");  // FingerPrintID
+							str.Append("<td>" + Convert.ToDateTime(DriverTagInfo.Rows[0]["TimeStamp"].ToString()).ToString("dd/MM/yyyy hh:mm tt") + "</td>");  // TaggedTime
+						}
+						else
+						{
+							str.Append("<td>NA</td>");  // DriverTagIn
+							str.Append("<td>NA</td>");  // FingerPrintID--
+							str.Append("<td>NA</td>");  // TaggedTime
+						} 
+
+						// Rules Details
+						for (int k = 0; k < Rules.Rows.Count; k++)
+						{
+							if (Convert.ToString(Info.Rows[i]["Id"]) == Convert.ToString(Rules.Rows[k]["TagId"]))
+							{
+								str.Append("<td>" + Rules.Rows[k]["Status"] + "</td>");
+							}
+						}
+						str.Append("</tr>");
+					}
+				}
+				else
+				{
+					str.Append("<tr><td colspan='38'>No Data To Display</td></tr>");
+				}
+
+				str.Append("</table></div>");
+				Response.Write(str.ToString());
+			}
+			else if (PsngrKey == "AsgndVehTrck")
+			{
+				StringBuilder str = new StringBuilder();
+				Info = objBll.GetPassengerTagingInfo(fromDateStr, toDateStr, sb.ToString(), Session["sessionId"].ToString());
+				str.Append("<div class='dtabledwrapper'><div class=\"reportHeader\">Passenger TagIn-TagOut Report</div> "
+								+ "<div class=\"reportHeader1\"><span class='reportHeaderSpan'><b>From:</b>"
+								+ Convert.ToDateTime(fromDateStr).ToString("dd'/'MM'/'yyyy hh:mm:ss tt")
+								+ "</span><span class='reportHeaderSpan'><b>To:</b>"
+								+ Convert.ToDateTime(toDateStr).ToString("dd'/'MM'/'yyyy hh:mm:ss tt")
+								+ "</span></div>"
+								+ "<div id=\"dtable\"></div>");
+				str.Append("<table style='border:1px solid #0e67a3' cellpadding='10'><tr style='background-color:#0e67a3;color:white'>");
+				str.Append("<th>Name</th><th>Mobile No.</th><th>Vehicle Id</th><th>TagIn Time</th><th>TagIn Location</th>");
+				str.Append("<th>TagOut Time</th><th>TagOut Location</th><th>Distance</th><th>Route Travelled</th></tr>");
+				string color = "";
+				string distance = "0";
+				string BaseURL = "";
+				string RouteLink = "-";
+				string prvvehicle = "";
+				int totaldistance = 0;
+				if (Info.Rows.Count > 0)
+				{
+
+					for (int i = 0; i < Info.Rows.Count; i++)
+					{
+						string vehicleId = Info.Rows[i]["VehicleId"].ToString();
+						if (i == 0)
+						{
+							prvvehicle = vehicleId;
+						}
+						string TaginLocation = objBll.getPositionTxt(Info.Rows[i]["TagInLat"].ToString(), Info.Rows[i]["TagInLng"].ToString(), 0);
+						string TagoutLocation = "";
+						if (!string.IsNullOrEmpty(Info.Rows[i]["TagOutTime"].ToString()))
+							TagoutLocation = objBll.getPositionTxt(Info.Rows[i]["TagOutLat"].ToString(), Info.Rows[i]["TagOutLng"].ToString(), 0);
+						//color = "#e6f3ff";
+						if (i % 2 == 0)
+							color = "#E9E9E9"; 
+						if (!string.IsNullOrEmpty(Info.Rows[i]["TagInTime"].ToString()) && !string.IsNullOrEmpty(Info.Rows[i]["TagOutTime"].ToString()))
+						{
+							string starttrip = Info.Rows[i]["TagInTime"].ToString();
+							string endtrip = Info.Rows[i]["TagOutTime"].ToString();
+							DateTime start = Convert.ToDateTime(starttrip);
+							DateTime end = Convert.ToDateTime(endtrip);
+							if ((end - start).TotalDays <= 15)
+							{
+								object[] dist = objBll.accumulateDistance(vehicleId, start.ToString("yyyy-MM-dd HH:mm:ss"), end.ToString("yyyy-MM-dd HH:mm:ss"), null);
+								if (dist.Length > 0)
+								{
+									distance = Convert.ToInt32(Convert.ToDecimal(dist[0].ToString())).ToString();
+									if (prvvehicle == vehicleId)
+									{
+										totaldistance = totaldistance + Convert.ToInt32(distance);
+									}
+									else
+									{
+										str.Append("<tr style='background-color:#e6f3ff'><td colspan='7'><b>" + "Total" + "</b>"
+												+ "</td><td><b>" + totaldistance + "</b>"
+												+ "</td><td>" + "" + "</td></tr>");
+										prvvehicle = vehicleId;
+										totaldistance = Convert.ToInt32(distance);
+									}
+								}
+							}
+							if (string.IsNullOrEmpty(BaseURL))
+								BaseURL = "http://" + Request.Url.Authority.ToString() + "";
+							string dataUrl = "sessionId=" + sessionId + "&vehicleId=" + vehicleId + "&fromDate=" + Convert.ToDateTime(starttrip).ToString("yyyy-MM-dd HH:mm:ss") + "&toDate=" + Convert.ToDateTime(endtrip).ToString("yyyy-MM-dd HH:mm:ss");
+							BusinessLogicLayer.StringCipher objCip = new BusinessLogicLayer.StringCipher();
+							string enctxt = HttpUtility.UrlEncode(objCip.Encrypt(dataUrl));
+							RouteLink = "<a href='" + BaseURL + "/MobileShowRoute.aspx?e=1&q=" + enctxt + "'  target='_blank'>Route Link</a>";
+
+
+							str.Append("<tr style='background-color:" + color + "'><td>" + Info.Rows[i]["PsngrName"] + "</td>");
+							str.Append("<td>" + Info.Rows[i]["MobileNo"] + "</td>");
+							str.Append("<td>" + Info.Rows[i]["VehicleId"] + "</td>");
+							str.Append("<td>" + Info.Rows[i]["TagInTime"] + "</td>");
+							str.Append("<td>" + TaginLocation + "</td>");
+							str.Append("<td>" + Info.Rows[i]["TagOutTime"] + "</td>");
+							str.Append("<td>" + TagoutLocation + "</td>");
+							str.Append("<td>" + distance + "</td>");
+							str.Append("<td>" + RouteLink + "</td></tr>");
+						}
+
+					}
+					str.Append("<tr style='background-color:#e6f3ff'><td colspan='7'><b>" + "Total" + "</b>"
+												 + "</td><td><b>" + totaldistance + "</b>"
+												 + "</td><td>" + "" + "</td></tr>");
+				}
+				else
+				{
+					str.Append("<tr><td>No Data To Display</td><td></td></tr>");
+				}
+				str.Append("</table></div>");
+				Response.Write(str.ToString());
+			}
+			else
+			{
+				Response.Write("This report is not configured for you...!");
+			}
+		}		 
+	}
